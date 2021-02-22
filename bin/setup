@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+main() {
+  install_ansible
+  install_ansible_roles
+  install_ansible_plugins
+}
+
+install_ansible() {
+  sudo apt-get update
+  sudo apt-get install software-properties-common
+  sudo apt-get install ansible --yes
+}
+
+install_ansible_roles() {
+  ansible-galaxy install -r requirements.yml -p roles -f
+}
+
+install_ansible_plugins() {
+  ansible-galaxy collection install community.general
+}
+
+main "$@"

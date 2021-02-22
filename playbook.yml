@@ -1,0 +1,270 @@
+---
+- name: Set nathan as a passwordless sudoer.
+  tags: sudo
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    security_sudoers_passwordless: [ nathan ]
+
+  tasks:
+    - name: Add configured user accounts to passwordless sudoers.
+      lineinfile:
+        dest: /etc/sudoers
+        regexp: '^{{ item }}'
+        line: '{{ item }} ALL=(ALL) NOPASSWD: ALL'
+        state: present
+        validate: 'visudo -cf %s'
+        mode: 0644
+      with_items: "{{ security_sudoers_passwordless }}"
+      when: security_sudoers_passwordless | length > 0
+
+# - name: Upgrade packages to their latest version.
+#   tags: upgrade
+#   hosts: localhost
+#   connection: local
+#   become: true
+
+#   tasks:
+#     - name: Upgrade system packages.
+#       apt:
+#         update_cache: true
+#         upgrade: true
+
+- name: Install system packages.
+  tags: packages
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    ansible_os_family: Debian
+    ansible_distribution: Ubuntu
+    ansible_distribution_major_version: 20
+
+    deb_packages:
+      # Hyper.
+      - https://releases.hyper.is/download/deb
+      # Zoom.
+      - https://zoom.us/client/latest/zoom_amd64.deb
+      # Lando.
+      # - https://files.devwithlando.io/lando-stable.deb
+
+    packages:
+      - ansible
+      - code
+      - curl
+      - git
+      - gnome-tweaks
+      - rbenv
+      - snapd
+      - steam-installer
+      - vim
+      - virtualbox
+      - virtualbox-ext-pack
+      - zsh
+
+      # Shadow dependencies.
+      - gconf2
+      - libgles2-mesa
+      - libubsan0
+      - libuv1
+      - libva-glx2
+
+      # Hyper dependencies.
+      - graphicsmagick
+      - icnsutils
+      - xz-utils
+
+    snap_packages:
+      - name: slack
+        classic: true
+      - name: spotify
+        classic: false
+      - name: heroku
+        classic: true
+
+    docker_package_state: latest
+    docker_users: [nathan]
+
+    nvm_version: v0.37.2
+
+    php_enable_webserver: false
+    php_version: "7.4"
+
+  roles:
+    - geerlingguy.php-versions
+    - geerlingguy.php
+    - geerlingguy.docker
+
+  pre_tasks:
+    - name: Ensure the VSCode apt respository exists.
+      command: bash scripts/vscode-repository.sh
+      args:
+        creates: /etc/apt/sources.list.d/vscode.list
+        warn: false
+
+    # https://www.reddit.com/r/ansible/comments/l1wof8/install_virtualboxextpack_accepting_the_eula/
+    - name: Accept virtualbox-ext-pack seen license.
+      debconf:
+        name: virtualbox-ext-pack
+        question: virtualbox-ext-pack/license
+        value: 'true'
+        vtype: seen
+
+    - name: Accept virtualbox-ext-pack select license.
+      debconf:
+        name: virtualbox-ext-pack
+        question: virtualbox-ext-pack/license
+        value: 'true'
+        vtype: select
+
+  tasks:
+    - name: Ensure packages are installed.
+      apt:
+        update_cache: true
+        name: "{{ packages }}"
+        state: latest
+
+    - name: Ensure deb packages are installed.
+      apt:
+        deb: "{{ item }}"
+      with_items: "{{ deb_packages }}"
+
+    - name: Ensure snap packages are installed.
+      community.general.snap:
+        name: "{{ item.name }}"
+        classic: "{{ item.classic }}"
+      with_items: "{{ snap_packages }}"
+
+    - name: Ensure NVM is installed.
+      shell: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh | bash
+      args:
+        creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+        warn: false
+
+    - name: Ensure oh-my-zsh is installed.
+      shell: curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash
+      args:
+        creates: "{{ ansible_env.HOME }}/.oh-my-zsh"
+        warn: false
+
+    - name: Ensure Shadow installation directory exists.
+      file:
+        path: /opt/shadow
+        state: directory
+        owner: nathan
+        group: nathan
+
+    - name: Ensure Shadow is installed.
+      get_url:
+        url: https://update.shadow.tech/launcher/prod/linux/ubuntu_18.04/Shadow.AppImage
+        dest: /opt/shadow/Shadow.AppImage
+        owner: nathan
+        group: nathan
+        mode: "0770"
+
+    - name: Ensure platformcli is installed.
+      shell: curl -fsS https://platform.sh/cli/installer | php
+      args:
+        creates: "{{ ansible_env.HOME }}/.platformsh"
+        warn: false
+
+- name: Configure the system.
+  tags: configure
+  hosts: localhost
+  connection: local
+
+  vars:
+    gem_fury_token: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      38633861663133623736393632663861663835313633366338396535643461366663373637356538
+      6365363236633633663363323665663965653064303331320a396230653865393761616663366533
+      38313030323032386334346331616536383233363336343761643937613965663362343863353461
+      3832333830653538610a306535393864343864353464646432653032316434623533326131363465
+      61653830353266626439653065643766663836373638653163663138343637653839
+    github_token: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      65366138333934366163656135373532613438373563343863616639646263333836366131666332
+      3365636237326163633931636364386536653932366165650a666436303738623938396537393765
+      35393139383335303733616162653433323935373337323438366630316163616235303533653666
+      6537663137313639320a643830323337393838626461366234616337386439373732636332386638
+      63666534303663383039383930386633386663323332613662323762626139363937396431383634
+      3837303266393439303931316165366630356638643031373264
+
+  tasks:
+    - name: Create a fonts directory.
+      file:
+        path: "{{ ansible_env.HOME }}/.fonts"
+        owner: nathan
+        group: nathan
+        state: directory
+
+    - name: Install the fonts.
+      copy:
+        src: "{{ item }}"
+        dest: "{{ ansible_env.HOME }}/.fonts"
+        owner: nathan
+        group: nathan
+      with_fileglob: "{{ playbook_dir }}/fonts/*"
+
+    - name: Clear the font cache.
+      command: fc-cache -f -v
+
+    - name: Ensure .zshrc file is present.
+      template:
+        src: templates/.zshrc.j2
+        dest: "{{ ansible_env.HOME }}/.zshrc"
+
+    - name: Set the default shell for nathan to zsh.
+      user:
+        name: nathan
+        shell: /usr/bin/zsh
+
+    - name: Ensure ssh keys are present.
+      template:
+        src: "templates/.ssh/{{ item }}"
+        dest: "{{ ansible_env.HOME }}/.ssh/{{ item }}"
+      with_items:
+        - id_rsa.nathan@dentzau.com
+        - id_rsa.nathan@dentzau.com.pub
+
+    - name: Create a symlink from ~/development to /media/nathan/Development
+      file:
+        src: /media/nathan/Development
+        dest: "{{ ansible_env.HOME }}/development"
+        state: link
+
+    - name: Ensure custom scripts are in place.
+      template:
+        src: "{{ item }}"
+        dest: "{{ ansible_env.HOME }}/bin/"
+        mode: "0770"
+      with_fileglob: [ "templates/bin/*" ]
+
+    - name: Ensure Hyper configuration is present.
+      template:
+        src: "{{ playbook_dir }}/templates/.hyper.js.j2"
+        dest: "{{ ansible_env.HOME }}/.hyper.js"
+        owner: nathan
+        group: nathan
+
+    - name: Ensure global git config is present.
+      template:
+        src: "{{ playbook_dir }}/templates/.gitconfig.j2"
+        dest: "{{ ansible_env.HOME }}/.gitconfig"
+        owner: nathan
+        group: nathan
+
+    - name: Ensure vimrc is present.
+      template:
+        src: "{{ playbook_dir }}/templates/.vimrc.j2"
+        dest: "{{ ansible_env.HOME }}/.vimrc"
+        owner: nathan
+        group: nathan
+
+    - name: Ensure git fixup command is present.
+      template:
+        src: "{{ playbook_dir }}/templates/bin/git-fixup"
+        dest: "{{ ansible_env.HOME }}/bin/git-fixup"
