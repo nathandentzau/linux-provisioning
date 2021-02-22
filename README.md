@@ -42,13 +42,13 @@ And you're provisioning!
 
 ## Notes
 
-* This playbook is only meant to run on my machine and this I've hard coded some
+* This playbook is only meant to run on my machine and thus I've hard coded some
   values in the playbook I would not normally hard code in a production
   playbook.
 * Use at your own discretion please.
-* I learned how to use Ansible from [@geerlinguy][]'s book back in 2016. I don't
+* I learned how to use Ansible from [@geerlingguy][]'s book back in 2016. I don't
   use it work anymore so I may be using outdated patterns.
 * I stole the `git fixup` script from [@marcaddeo][].
 
 [@geerlingguy]: https://github.com/geerlingguy
-[@marcaddeo] https://github.com/marcaddeo
+[@marcaddeo]: https://github.com/marcaddeo
