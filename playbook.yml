@@ -165,12 +165,6 @@
         group: nathan
         mode: "0770"
 
-    - name: Ensure platformcli is installed.
-      shell: curl -fsS https://platform.sh/cli/installer | php
-      args:
-        creates: "{{ ansible_env.HOME }}/.platformsh"
-        warn: false
-
 - name: Configure the system.
   tags: configure
   hosts: localhost
@@ -268,3 +262,19 @@
       template:
         src: "{{ playbook_dir }}/templates/bin/git-fixup"
         dest: "{{ ansible_env.HOME }}/bin/git-fixup"
+
+    - name: Ensure platformcli is installed.
+      shell: curl -fsS https://platform.sh/cli/installer | php
+      args:
+        creates: "{{ ansible_env.HOME }}/.platformsh"
+        warn: false
+
+    - name: Ensure the rbenv plugins directory exists
+      file:
+        path: "{{ ansible_env.HOME }}/.rbenv/plugins"
+        state: directory
+
+    - name: Ensure ruby-build plugin for rbenv is installed.
+      git:
+        repo: https://github.com/rbenv/ruby-build.git
+        dest: "{{ ansible_env.HOME }}/.rbenv/plugins/ruby-build"
